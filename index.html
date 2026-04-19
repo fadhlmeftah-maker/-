@@ -1,214 +1,26 @@
-<script type="module">
-/* =========================
-   🔥 إعداد Firebase
-========================= */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import {
-    getFirestore,
-    collection,
-    addDoc,
-    getDocs,
-    deleteDoc,
-    doc
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marbucks</title>
 
-const firebaseConfig = {
-    apiKey: "PUT-YOUR-KEY",
-    authDomain: "PUT-YOUR-DOMAIN",
-    projectId: "PUT-YOUR-ID",
-};
+<link rel="stylesheet" href="style.css">
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+</head>
+<body>
 
-/* =========================
-   🧠 الحالة العامة
-========================= */
-let productsDatabase = [];
-let userCart = [];
-let activeBranch = "";
+<h1>Marbucks</h1>
 
-/* =========================
-   🚀 بدء التطبيق
-========================= */
-async function startApp(branchName) {
-    activeBranch = branchName;
+<div id="products"></div>
 
-    document.getElementById('welcome-screen').classList.add('opacity-0', 'pointer-events-none');
+<script src="app.js"></script>
 
-    setTimeout(async () => {
-        document.getElementById('welcome-screen').style.display = 'none';
-        document.getElementById('main-app').classList.remove('hidden');
-        document.getElementById('branch-display').innerText = branchName;
-
-        await loadProducts();
-    }, 400);
-}
-
-/* =========================
-   📥 تحميل المنتجات من Firebase
-========================= */
-async function loadProducts() {
-    try {
-        const snapshot = await getDocs(collection(db, "products"));
-
-        productsDatabase = [];
-
-        snapshot.forEach(docItem => {
-            productsDatabase.push({
-                id: docItem.id,
-                ...docItem.data()
-            });
-        });
-
-        filterMenu('legends');
-
-    } catch (err) {
-        console.error("خطأ في تحميل المنتجات:", err);
-    }
-}
-
-/* =========================
-   📂 عرض المنتجات حسب التصنيف
-========================= */
-function filterMenu(category) {
-    document.querySelectorAll('.cat-tab').forEach(tab => tab.classList.remove('active'));
-    document.getElementById('tab-' + category).classList.add('active');
-
-    const grid = document.getElementById('products-grid');
-    const items = productsDatabase.filter(p => p.cat === category);
-
-    let html = '';
-
-    items.forEach((item, index) => {
-        html += `
-        <div class="product-card glass-panel rounded-3xl p-4 flex flex-col items-center text-center opacity-0 animate-fadeUp" style="animation-delay:${index * 50}ms;">
-            <div class="w-full h-32 mb-4">
-                <img loading="lazy" src="${item.img}" class="w-full h-full object-cover rounded-2xl">
-            </div>
-            <h3 class="font-bold text-sm mb-1">${item.name}</h3>
-            <p class="gold-text font-black">${item.price} ر.ي</p>
-            <button onclick="addToCart('${item.id}')" class="w-full py-2 bg-white/10 rounded-xl mt-3">إضافة</button>
-        </div>
-        `;
-    });
-
-    grid.innerHTML = html;
-}
-
-/* =========================
-   🛒 نظام السلة
-========================= */
-function addToCart(id) {
-    const product = productsDatabase.find(p => p.id == id);
-    const existing = userCart.find(i => i.id == id);
-
-    if (existing) {
-        existing.qty++;
-    } else {
-        userCart.push({ ...product, qty: 1 });
-    }
-
-    updateCartIndicators();
-}
-
-function updateCartIndicators() {
-    const total = userCart.reduce((sum, i) => sum + i.qty, 0);
-    const badge = document.getElementById('cart-badge');
-
-    badge.innerText = total;
-    badge.classList.toggle('hidden', total === 0);
-}
-
-function toggleCart() {
-    const drawer = document.getElementById('cart-drawer');
-    drawer.classList.toggle('hidden');
-    drawer.classList.toggle('flex');
-
-    if (!drawer.classList.contains('hidden')) {
-        renderCartDetails();
-    }
-}
-
-function renderCartDetails() {
-    const container = document.getElementById('cart-list');
-
-    if (!userCart.length) {
-        container.innerHTML = "السلة فارغة";
-        return;
-    }
-
-    let html = '';
-    let total = 0;
-
-    userCart.forEach(item => {
-        total += item.price * item.qty;
-
-        html += `
-        <div class="glass-panel p-4 rounded-xl flex justify-between">
-            <span>${item.name} × ${item.qty}</span>
-            <span>${item.price * item.qty}</span>
-        </div>
-        `;
-    });
-
-    container.innerHTML = html;
-    document.getElementById('cart-total-price').innerText = total + " ريال";
-}
-
-/* =========================
-   📦 إرسال الطلب (احترافي)
-========================= */
-async function sendOrderToWhatsApp() {
-    if (!userCart.length) return;
-
-    const total = userCart.reduce((s, i) => s + i.price * i.qty, 0);
-
-    // 🔥 حفظ الطلب في Firebase
-    await addDoc(collection(db, "orders"), {
-        branch: activeBranch,
-        items: userCart,
-        total: total,
-        createdAt: new Date()
-    });
-
-    // 📱 إرسال عبر واتساب
-    let message = `طلب جديد\n${activeBranch}\n`;
-    userCart.forEach(i => {
-        message += `${i.name} × ${i.qty}\n`;
-    });
-    message += `الإجمالي: ${total}`;
-
-    window.open(`https://wa.me/967780011501?text=${encodeURIComponent(message)}`);
-
-    // تنظيف السلة
-    userCart = [];
-    updateCartIndicators();
-}
-
-/* =========================
-   🛠️ لوحة الإدارة
-========================= */
-async function addNewProduct() {
-    const name = document.getElementById('new-name').value;
-    const price = parseInt(document.getElementById('new-price').value);
-    const cat = document.getElementById('new-cat').value;
-    const img = document.getElementById('new-img').value || '';
-
-    if (!name || !price) return alert("أدخل البيانات");
-
-    await addDoc(collection(db, "products"), {
-        name, price, cat, img
-    });
-
-    alert("تمت الإضافة");
-    loadProducts();
-}
-
-async function removeProductFromDB(id) {
-    if (!confirm("حذف المنتج؟")) return;
-
-    await deleteDoc(doc(db, "products", id));
-    loadProducts();
+<script>
+if ('serviceWorker' in navigator) {
+ navigator.serviceWorker.register('sw.js');
 }
 </script>
+
+</body>
+</html>
